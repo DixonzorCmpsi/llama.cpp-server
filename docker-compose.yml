@@ -1,0 +1,54 @@
+services:
+  # --------------------------------------------------------------------------
+  # 1. THE AI INFERENCE ENGINE (HIDDEN FROM HOST)
+  # --------------------------------------------------------------------------
+  ai-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: local-ai-api
+    restart: unless-stopped
+    # Notice: No 'ports' mapping here.
+    # The Windows host cannot directly access port 8080.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./model_cache:/models
+    command: >
+      --models-dir /models
+      --ctx-size 8192
+      --n-gpu-layers 999
+      --models-max 2
+
+  # --------------------------------------------------------------------------
+  # 2. THE SECURITY GATEWAY (EXPOSED TO HOST)
+  # --------------------------------------------------------------------------
+  api-gateway:
+    image: nginx:alpine
+    container_name: local-ai-gateway
+    restart: unless-stopped
+    ports:
+      # This binds Nginx's internal port 80 to your Windows host's port 80
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ai-server
+
+  # --------------------------------------------------------------------------
+  # 3. THE CLOUDFLARE TUNNEL (DISABLED FOR LOCAL TESTING)
+  # --------------------------------------------------------------------------
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: local-ai-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel run
+  #   volumes:
+  #     - ./cloudflared_setup:/etc/cloudflared:ro
+  #   depends_on:
+  #     - api-gateway
