@@ -4,6 +4,38 @@ A self-hosted, OpenAI-compatible inference API built on [llama.cpp](https://gith
 
 ---
 
+## Project Structure
+
+```
+onPrem/
+├── Dockerfile               # AI server image (CUDA + CPU fallback)
+├── docker-compose.yml       # Stack definition
+├── nginx.conf               # Gateway auth and proxying
+├── .env                     # Stack secrets (CF tunnel token) — gitignored
+├── .env.example             # Template for .env
+├── auth_keys.conf           # Bearer tokens — gitignored, never committed
+├── auth_keys.conf.example   # Template for auth_keys.conf
+│
+├── docs/
+│   ├── API.md               # Full API reference + integration examples
+│   └── STARTUP_GUIDE.md     # First-run checklist and troubleshooting
+│
+├── scripts/
+│   ├── download_model.py    # Download GGUF models from Hugging Face
+│   └── warmup.py            # Pre-warm all models into VRAM
+│
+├── chat_cli/
+│   ├── chat.py              # Interactive terminal chat client
+│   ├── requirements.txt     # Python dependencies
+│   └── .env                 # CLI connection config — gitignored
+│
+└── model_cache/
+    ├── *.gguf               # Model weight files — gitignored
+    └── *.yml                # Model preset files
+```
+
+---
+
 ## Architecture
 
 ```
@@ -20,30 +52,38 @@ Client → http://localhost → [Nginx gateway] → [llama-server:8080]
 
 ## Quick Start
 
-### 1. Download a model
+### 1. Set up auth keys
+
+```powershell
+copy auth_keys.conf.example auth_keys.conf
+# Edit auth_keys.conf and add a real key — generate one with:
+python -c "import secrets; print('sk-' + secrets.token_hex(24))"
+```
+
+### 2. Download a model
 
 ```powershell
 pip install huggingface_hub
-python download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
 ```
 
-### 2. Start the stack
+### 3. Start the stack
 
 ```powershell
 docker compose up -d --build
 ```
 
-### 3. Verify
+### 4. Verify
 
 ```powershell
-curl.exe http://localhost/v1/models -H "Authorization: Bearer sk-my-super-secret-on-prem-key"
+curl.exe http://localhost/v1/models -H "Authorization: Bearer <your-key>"
 ```
 
-### 4. Chat
+### 5. Chat
 
 ```powershell
 curl.exe http://localhost/v1/chat/completions `
-  -H "Authorization: Bearer sk-my-super-secret-on-prem-key" `
+  -H "Authorization: Bearer <your-key>" `
   -H "Content-Type: application/json" `
   -d "{\"model\":\"Meta-Llama-3.1-8B-Instruct-Q4_K_M\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
 ```
@@ -76,10 +116,10 @@ The model `id` for API calls is the preset filename **without** `.yml`.
 Download any model with:
 
 ```powershell
-python download_model.py "<HuggingFace Repo ID>"
+python scripts/download_model.py "<HuggingFace Repo ID>"
 ```
 
-The script picks the first available `.gguf` from the repo (usually Q4_K_M). To pick a specific quantization, pass the exact filename as the second argument — see [Choosing a Quantization](#choosing-a-quantization).
+Defaults to Q4_K_M. To pick a specific quantization pass the filename as a second argument.
 
 ### General Purpose / Chat
 
@@ -126,8 +166,6 @@ The script picks the first available `.gguf` from the repo (usually Q4_K_M). To 
 
 ## Choosing a Quantization
 
-Quantization trades accuracy for size/speed. Q4_K_M is the recommended default.
-
 | Quant | Quality | Size | Best For |
 |-------|---------|------|----------|
 | `Q2_K` | lowest | ~35% | Tight VRAM, acceptable quality |
@@ -135,96 +173,36 @@ Quantization trades accuracy for size/speed. Q4_K_M is the recommended default.
 | `Q5_K_M` | better | ~65% | More VRAM, better output |
 | `Q8_0` | near-lossless | ~100% | Maximum quality, large VRAM |
 
-To download a specific quant:
-
 ```powershell
-python download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF" "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
-```
-
----
-
-## Pulling Models via the API
-
-After downloading and restarting the server, models are served on the standard OpenAI-compatible endpoints.
-
-### List available models
-
-```bash
-curl http://localhost/v1/models \
-  -H "Authorization: Bearer sk-my-super-secret-on-prem-key"
-```
-
-### Chat completion
-
-```bash
-curl http://localhost/v1/chat/completions \
-  -H "Authorization: Bearer sk-my-super-secret-on-prem-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Meta-Llama-3.1-8B-Instruct-Q4_K_M",
-    "messages": [
-      {"role": "system", "content": "You are a helpful assistant."},
-      {"role": "user", "content": "What is the capital of France?"}
-    ]
-  }'
-```
-
-### Streaming chat completion
-
-```bash
-curl http://localhost/v1/chat/completions \
-  -H "Authorization: Bearer sk-my-super-secret-on-prem-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Meta-Llama-3.1-8B-Instruct-Q4_K_M",
-    "messages": [{"role": "user", "content": "Tell me a story"}],
-    "stream": true
-  }'
-```
-
-### Python (OpenAI SDK)
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost/v1",
-    api_key="sk-my-super-secret-on-prem-key",
-)
-
-response = client.chat.completions.create(
-    model="Meta-Llama-3.1-8B-Instruct-Q4_K_M",
-    messages=[{"role": "user", "content": "Hello"}],
-)
-print(response.choices[0].message.content)
-```
-
-### PowerShell
-
-```powershell
-curl.exe http://localhost/v1/chat/completions `
-  -H "Authorization: Bearer sk-my-super-secret-on-prem-key" `
-  -H "Content-Type: application/json" `
-  -d "{\"model\":\"Meta-Llama-3.1-8B-Instruct-Q4_K_M\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF" "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
 ```
 
 ---
 
 ## Auth
 
-API keys are defined in [nginx.conf](./nginx.conf) under the `map $http_authorization` block:
-
-```nginx
-map $http_authorization $is_authorized {
-    default 0;
-    "Bearer sk-your-key-here" 1;
-}
-```
-
-Add or remove lines to manage access. After editing, reload the gateway (no rebuild needed):
+API keys live in `auth_keys.conf` — **gitignored, never committed**.
 
 ```powershell
-docker compose restart api-gateway
+copy auth_keys.conf.example auth_keys.conf
+```
+
+Generate a key:
+
+```powershell
+python -c "import secrets; print('sk-' + secrets.token_hex(24))"
+```
+
+Add one line per key in `auth_keys.conf`:
+
+```nginx
+"Bearer sk-your-real-key-here" 1;
+```
+
+After editing, reload the gateway:
+
+```powershell
+docker compose up -d api-gateway
 ```
 
 ---
@@ -235,7 +213,8 @@ docker compose restart api-gateway
 |--------|---------|
 | First start / rebuild | `docker compose up -d --build` |
 | Restart AI server (new model) | `docker compose restart ai-server` |
-| Restart gateway (nginx.conf change) | `docker compose restart api-gateway` |
+| Reload gateway (auth key change) | `docker compose up -d api-gateway` |
+| Pre-warm all models into VRAM | `python scripts/warmup.py` |
 | Stop everything | `docker compose down` |
 | Check status | `docker compose ps` |
 | AI server logs | `docker compose logs -f ai-server` |
@@ -243,21 +222,7 @@ docker compose restart api-gateway
 
 ---
 
-## File Reference
+## Docs
 
-| File | Purpose |
-|------|---------|
-| [docker-compose.yml](./docker-compose.yml) | Stack definition |
-| [Dockerfile](./Dockerfile) | AI server image (CUDA + CPU fallback) |
-| [nginx.conf](./nginx.conf) | Gateway auth and proxying |
-| [download_model.py](./download_model.py) | Download GGUF models from Hugging Face |
-| [chat_cli/chat.py](./chat_cli/chat.py) | Interactive terminal chat client |
-| [chat_cli/.env](./chat_cli/.env) | CLI connection config (not committed) |
-| `model_cache/*.gguf` | Model weight files (not committed) |
-| `model_cache/*.yml` | Model preset files (committed) |
-
----
-
-## GPU Note
-
-The stack defaults to GPU inference with automatic CPU fallback. See [STARTUP_GUIDE.md](./STARTUP_GUIDE.md) for GPU setup and troubleshooting.
+- [docs/API.md](./docs/API.md) — Full API reference, integration examples (Python, JS, TS, C#, Go, curl, LangChain)
+- [docs/STARTUP_GUIDE.md](./docs/STARTUP_GUIDE.md) — First-run checklist, troubleshooting

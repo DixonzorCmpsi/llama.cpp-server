@@ -3,11 +3,8 @@
 Download a GGUF model from Hugging Face and add it to the model cache.
 
 Usage:
-    python download_model.py "TheBloke/Mistral-7B-Instruct-v0.2-GGUF" "Mistral-7B-Instruct-v0.2.Q4_K_M.gguf"
-    
-    or with a direct filename:
-    
-    python download_model.py "Mistral-7B-Instruct-v0.2.Q4_K_M.gguf"
+    python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+    python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF" "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
 
 The script will attempt to find the file on Hugging Face and download it.
 """
@@ -25,15 +22,18 @@ except ImportError:
     print("Install it with: pip install huggingface_hub")
     sys.exit(1)
 
+# Root of the repo (one level up from scripts/)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 def find_model_repo(model_name: str) -> tuple[str, str]:
     """
     Attempt to find a GGUF model on Hugging Face.
-    
+
     Args:
-        model_name: Either a full repo ID (e.g., "TheBloke/Mistral-7B-Instruct-v0.2-GGUF")
-                   or just a model filename (e.g., "Mistral-7B-Instruct-v0.2.Q4_K_M.gguf")
-    
+        model_name: Either a full repo ID (e.g., "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF")
+                   or just a model filename (e.g., "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf")
+
     Returns:
         Tuple of (repo_id, filename)
     """
@@ -45,30 +45,28 @@ def find_model_repo(model_name: str) -> tuple[str, str]:
             files = list_repo_files(repo_id, repo_type="model")
             gguf_files = [f for f in files if f.endswith(".gguf")]
             if gguf_files:
-                # Return the first GGUF file found
-                return repo_id, gguf_files[0]
+                # Prefer Q4_K_M if available, otherwise return the first
+                preferred = next((f for f in gguf_files if "Q4_K_M" in f), gguf_files[0])
+                return repo_id, preferred
             else:
                 raise ValueError(f"No .gguf files found in {repo_id}")
         except Exception as e:
             raise ValueError(f"Could not access repository {repo_id}: {e}")
-    
-    # If it's just a filename, search for it on TheBloke's repos (common GGUF source)
+
+    # If it's just a filename, search for it on known repos
     else:
-        # Common GGUF model sources
         known_repos = [
             "TheBloke",
             "mlabonne",
         ]
-        
-        # Search in common repos
+
         for creator in known_repos:
             try:
-                # Try variations
                 repo_attempts = [
                     f"{creator}/{model_name.replace('.gguf', '')}-GGUF",
                     f"{creator}/{model_name.replace('.gguf', '')}",
                 ]
-                
+
                 for repo_id in repo_attempts:
                     try:
                         files = list_repo_files(repo_id, repo_type="model")
@@ -79,10 +77,10 @@ def find_model_repo(model_name: str) -> tuple[str, str]:
                         continue
             except:
                 continue
-        
+
         raise ValueError(
             f"Could not find '{model_name}' on Hugging Face.\n"
-            f"Try specifying the full repo: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF'"
+            f"Try specifying the full repo: 'bartowski/Meta-Llama-3.1-8B-Instruct-GGUF'"
         )
 
 
@@ -102,30 +100,31 @@ def _write_preset(cache_dir: str, filename: str) -> None:
     print(f"    Restart the server: docker compose restart ai-server")
 
 
-def download_model(model_input: str, cache_dir: str = None) -> str:
+def download_model(model_input: str, cache_dir: str = None, filename: str = None) -> str:
     """
     Download a GGUF model to the cache directory.
-    
+
     Args:
         model_input: Model repo ID or filename
-        cache_dir: Directory to save the model (defaults to ./model_cache)
-    
+        cache_dir: Directory to save the model (defaults to ../model_cache)
+        filename: Specific .gguf filename to download (overrides auto-select)
+
     Returns:
         Path to the downloaded model
     """
     if cache_dir is None:
-        cache_dir = os.path.join(os.path.dirname(__file__), "model_cache")
-    
+        cache_dir = os.path.join(_REPO_ROOT, "model_cache")
+
     # Create cache directory if it doesn't exist
     os.makedirs(cache_dir, exist_ok=True)
-    
+
     print(f"[*] Looking for model: {model_input}")
 
     # Find the repo and filename
-    repo_id, filename = find_model_repo(model_input)
+    repo_id, auto_filename = find_model_repo(model_input)
+    filename = filename or auto_filename
     print(f"[+] Found: {repo_id}/{filename}")
 
-    # Check if it already exists
     local_path = os.path.join(cache_dir, filename)
     if os.path.exists(local_path):
         size_mb = os.path.getsize(local_path) / (1024 * 1024)
@@ -137,7 +136,6 @@ def download_model(model_input: str, cache_dir: str = None) -> str:
     print(f"    Destination: {cache_dir}")
 
     try:
-        # Download the model
         local_path = hf_hub_download(
             repo_id=repo_id,
             filename=filename,
@@ -165,34 +163,39 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Download using repo ID
-  python download_model.py "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
-  
-  # Download using model name (searches known repos)
-  python download_model.py "Mistral-7B-Instruct-v0.2.Q4_K_M.gguf"
-  
-  # Specify custom cache directory
-  python download_model.py "TheBloke/Mistral-7B-Instruct-v0.2-GGUF" -c /path/to/models
+  # Auto-select Q4_K_M from a repo
+  python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+
+  # Pick a specific quantization
+  python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF" "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+
+  # Specify a custom cache directory
+  python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF" -c C:\\models
 
 Popular GGUF Sources:
-  - TheBloke: https://huggingface.co/TheBloke (quantized models)
-  - MLAbonne: https://huggingface.co/mlabonne (various models)
+  - bartowski: https://huggingface.co/bartowski (recommended)
+  - TheBloke:  https://huggingface.co/TheBloke
         """
     )
-    
+
     parser.add_argument(
         "model",
-        help='Model repo ID (e.g., "TheBloke/Mistral-7B-Instruct-v0.2-GGUF") or filename'
+        help='Model repo ID (e.g., "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF") or filename'
     )
     parser.add_argument(
         "-c", "--cache",
         help="Cache directory (defaults to ./model_cache)",
         default=None
     )
-    
+    parser.add_argument(
+        "filename",
+        nargs="?",
+        help='Specific .gguf filename to download (e.g., "model-Q4_K_M.gguf"). Defaults to Q4_K_M if available.',
+        default=None,
+    )
     args = parser.parse_args()
-    
-    download_model(args.model, args.cache)
+
+    download_model(args.model, args.cache, args.filename)
 
 
 if __name__ == "__main__":

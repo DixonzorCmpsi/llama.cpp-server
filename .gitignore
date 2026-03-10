@@ -3,6 +3,11 @@
 # =============================================================================
 .env
 chat_cli/.env
+auth_keys.conf
+
+# Keep example/template files — they are safe to commit
+!.env.example
+!auth_keys.conf.example
 
 # =============================================================================
 # MODEL WEIGHTS — large binaries, download separately via download_model.py

@@ -1,0 +1,11 @@
+# =============================================================================
+# AUTHORIZED API KEYS — copy this file to auth_keys.conf and add real keys
+# =============================================================================
+# One key per line:  "Bearer <key>" 1;
+# After editing, reload the gateway: docker compose restart api-gateway
+#
+# Generate a new key with:
+#   python -c "import secrets; print('sk-' + secrets.token_hex(24))"
+# =============================================================================
+
+"Bearer sk-replace-with-your-real-key" 1;
