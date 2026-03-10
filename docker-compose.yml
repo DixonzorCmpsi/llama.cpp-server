@@ -24,6 +24,11 @@ services:
       --ctx-size 8192
       --n-gpu-layers 999
       --models-max 3
+      --flash-attn on
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --defrag-thold 0.1
+      --parallel 2
 
   # --------------------------------------------------------------------------
   # 2. THE SECURITY GATEWAY (EXPOSED TO HOST)

@@ -1,0 +1,2 @@
+model: /models/cognitivecomputations_Dolphin3.0-R1-Mistral-24B-Q3_K_M.gguf
+n_ctx: 8192

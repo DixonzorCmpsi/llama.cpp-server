@@ -39,14 +39,17 @@ onPrem/
 ## Architecture
 
 ```
-Client → http://localhost → [Nginx gateway] → [llama-server:8080]
-                             (API key auth)     (GPU/CPU inference)
+Internet → https://ai.deetalk.win → [Cloudflare Edge] → [cloudflared tunnel]
+                                                               ↓
+Client (local) → http://localhost → [Nginx gateway:80] → [llama-server:8080]
+                                     (API key auth)        (GPU/CPU inference)
 ```
 
 | Container | Image | Port | Purpose |
 |-----------|-------|------|---------|
 | `local-ai-gateway` | `nginx:alpine` | `80` (host) | Auth + reverse proxy |
 | `local-ai-api` | Built from `Dockerfile` | internal `8080` | llama.cpp inference |
+| `local-ai-tunnel` | `cloudflare/cloudflared` | none | Outbound tunnel to Cloudflare |
 
 ---
 
@@ -60,32 +63,43 @@ copy auth_keys.conf.example auth_keys.conf
 python -c "import secrets; print('sk-' + secrets.token_hex(24))"
 ```
 
-### 2. Download a model
+### 2. Set up the Cloudflare tunnel (optional, for public access)
+
+```powershell
+copy .env.example .env
+# Edit .env and add your tunnel token from the Cloudflare Zero Trust dashboard
+```
+
+### 3. Download a model
 
 ```powershell
 pip install huggingface_hub
 python scripts/download_model.py "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
 ```
 
-### 3. Start the stack
+### 4. Start the stack
 
 ```powershell
 docker compose up -d --build
 ```
 
-### 4. Verify
+### 5. Verify
 
 ```powershell
+# Local
 curl.exe http://localhost/v1/models -H "Authorization: Bearer <your-key>"
+
+# Public (if tunnel is configured)
+curl.exe https://ai.deetalk.win/v1/models -H "Authorization: Bearer <your-key>"
 ```
 
-### 5. Chat
+### 6. Chat
 
 ```powershell
 curl.exe http://localhost/v1/chat/completions `
   -H "Authorization: Bearer <your-key>" `
   -H "Content-Type: application/json" `
-  -d "{\"model\":\"Meta-Llama-3.1-8B-Instruct-Q4_K_M\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+  -d "{\"model\":\"cognitivecomputations_Dolphin3.0-R1-Mistral-24B-Q3_K_M\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
 ```
 
 ---
@@ -120,6 +134,19 @@ python scripts/download_model.py "<HuggingFace Repo ID>"
 ```
 
 Defaults to Q4_K_M. To pick a specific quantization pass the filename as a second argument.
+
+### Currently Installed (RTX 3060, 12 GB VRAM)
+
+| Model ID | Size | Best For |
+|----------|------|----------|
+| `mistral-7b-instruct-v0.2.Q2_K` | 2.9 GB | Fast general chat, low VRAM |
+| `Qwen2.5-Coder-7B-Instruct-Q4_K_M` | 4.4 GB | Code generation, debugging |
+| `DeepSeek-R1-Distill-Llama-8B-Q4_K_M` | 4.6 GB | Reasoning, step-by-step thinking |
+| `cognitivecomputations_Dolphin3.0-R1-Mistral-24B-Q3_K_M` | ~10.7 GB | General purpose, agentic, uncensored |
+
+> **VRAM note:** Dolphin 24B uses ~10.7 GB — load it alone. The 7–8B models can coexist (up to `--models-max 3` active simultaneously).
+
+---
 
 ### General Purpose / Chat
 
@@ -219,6 +246,7 @@ docker compose up -d api-gateway
 | Check status | `docker compose ps` |
 | AI server logs | `docker compose logs -f ai-server` |
 | Gateway logs | `docker compose logs -f api-gateway` |
+| Tunnel logs | `docker compose logs -f cloudflared` |
 
 ---
 

@@ -8,7 +8,8 @@ This server exposes an **OpenAI-compatible REST API**, meaning any library or to
 
 | Setting | Value |
 |---------|-------|
-| Base URL | `http://localhost/v1` |
+| Local URL | `http://localhost/v1` |
+| Public URL | `https://ai.deetalk.win/v1` |
 | Auth | `Authorization: Bearer <your-key>` |
 | Keys | Defined in `auth_keys.conf` |
 
@@ -57,11 +58,14 @@ curl http://localhost/v1/models \
 
 ## Available Models
 
-| Model ID | Best For |
-|----------|----------|
-| `mistral-7b-instruct-v0.2.Q2_K` | Fast general chat, low VRAM |
-| `DeepSeek-R1-Distill-Llama-8B-Q4_K_M` | Reasoning, analysis, step-by-step thinking |
-| `Qwen2.5-Coder-7B-Instruct-Q4_K_M` | Code generation, debugging, technical tasks |
+| Model ID | Size | Best For |
+|----------|------|----------|
+| `mistral-7b-instruct-v0.2.Q2_K` | 2.9 GB | Fast general chat, low VRAM |
+| `Qwen2.5-Coder-7B-Instruct-Q4_K_M` | 4.4 GB | Code generation, debugging, technical tasks |
+| `DeepSeek-R1-Distill-Llama-8B-Q4_K_M` | 4.6 GB | Reasoning, analysis, step-by-step thinking |
+| `cognitivecomputations_Dolphin3.0-R1-Mistral-24B-Q3_K_M` | 10.7 GB | General purpose, agentic, uncensored (best quality) |
+
+> **Tip:** Use Dolphin for agentic/general tasks. Use DeepSeek for anything requiring structured reasoning. Use Qwen for code.
 
 ---
 
@@ -375,5 +379,5 @@ python scripts/warmup.py
 
 This sends a minimal request to each model, triggering loading into VRAM. Run it after `docker compose restart ai-server`.
 
-> **VRAM note:** Loading all three models simultaneously requires ~13–14 GB VRAM.
-> If your GPU has less, the server will load/unload models as needed (up to `--models-max` at once).
+> **VRAM note (RTX 3060, 12 GB):** Dolphin 24B uses ~10.7 GB alone. The 7–8B models (~5–6 GB each) can coexist.
+> The server loads up to `--models-max 3` models simultaneously and evicts the least-recently-used when the limit is hit.

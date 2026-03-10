@@ -102,6 +102,7 @@ Expected:
 
 - `local-ai-api` — `Up`
 - `local-ai-gateway` — `Up`
+- `local-ai-tunnel` — `Up` (if CF_TUNNEL_TOKEN is set in `.env`)
 
 ---
 
@@ -184,6 +185,30 @@ The first request will be slow (model loads on demand). Subsequent requests are 
 
 ---
 
+## 11. Cloudflare Tunnel (Public Access)
+
+To expose the API at `https://ai.deetalk.win/v1`:
+
+1. Create a free tunnel at [Cloudflare Zero Trust](https://one.dash.cloudflare.com) → Networks → Tunnels
+2. Copy the tunnel token (`eyJ...`)
+3. Add to `.env`:
+   ```
+   CF_TUNNEL_TOKEN=eyJ...your-token...
+   ```
+4. In the tunnel dashboard, add a **Public Hostname**:
+   - Subdomain: `ai` / Domain: `deetalk.win`
+   - Type: `HTTP` / URL: `api-gateway:80`
+5. Restart the stack: `docker compose up -d`
+6. Check tunnel is connected:
+   ```powershell
+   docker compose logs --tail 10 cloudflared
+   ```
+   Look for `Registered tunnel connection` (×4).
+
+> **Why HTTP internally?** Cloudflare terminates HTTPS at their edge. Inside the tunnel traffic is plain HTTP — safe because the tunnel itself is encrypted via QUIC.
+
+---
+
 ## Troubleshooting
 
 ### `curl: (7) Failed to connect to localhost port 80`
@@ -254,6 +279,16 @@ ports:
 
 Then use `http://localhost:8081`.
 
+### Tunnel not connecting / `local-ai-tunnel` keeps restarting
+
+Check `.env` has the correct `CF_TUNNEL_TOKEN`. Then:
+```powershell
+docker compose logs --tail 20 cloudflared
+```
+If the token is wrong you'll see `failed to authenticate`. Re-copy it from the Cloudflare dashboard.
+
+> **Note:** `docker compose restart` does not apply new volume mounts or env changes. Always use `docker compose up -d` to recreate containers with config changes.
+
 ### `unable to get image` / Docker not running
 
 Start Docker Desktop:
@@ -261,6 +296,21 @@ Start Docker Desktop:
 Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 ```
 Wait 10 seconds, then retry.
+
+---
+
+## Performance Flags
+
+The AI server runs with these flags in `docker-compose.yml` for maximum GPU throughput:
+
+| Flag | Effect |
+|------|--------|
+| `--flash-attn on` | Fused GPU attention kernel — biggest single speedup |
+| `--cache-type-k q8_0` | 8-bit quantized KV key cache — saves VRAM, faster transfers |
+| `--cache-type-v q8_0` | 8-bit quantized KV value cache — same benefit |
+| `--defrag-thold 0.1` | KV cache defrag — keeps speed consistent under load |
+| `--parallel 2` | 2 concurrent request slots per model |
+| `--n-gpu-layers 999` | All layers on GPU (CPU fallback if VRAM is exceeded) |
 
 ---
 
