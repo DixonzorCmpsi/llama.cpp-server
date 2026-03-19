@@ -102,6 +102,30 @@ curl.exe http://localhost/v1/chat/completions `
   -d "{\"model\":\"cognitivecomputations_Dolphin3.0-R1-Mistral-24B-Q3_K_M\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
 ```
 
+### 7. Interactive CLI Chat
+
+For a permanent client setup, use the included interactive CLI chat. You can specify the model in a `.env` file so you don't have to keep typing it.
+
+```powershell
+cd chat_cli
+copy .env.example .env
+```
+
+Edit the `chat_cli/.env` file to add your key and this model:
+
+```ini
+API_BASE_URL=http://localhost/v1
+API_KEY=sk-your-real-key-here
+MODEL=cognitivecomputations_Dolphin3.0-R1-Mistral-24B-Q3_K_M
+```
+
+Then run the chat application:
+
+```powershell
+pip install -r requirements.txt
+python chat.py
+```
+
 ---
 
 ## How Models Work
