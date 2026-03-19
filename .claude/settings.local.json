@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl.exe -s http://localhost/v1/chat/completions -H \"Authorization: Bearer sk-73173dd9ab3bc8822ae9e148f6ba60331fde0f902a2ef880\" -H \"Content-Type: application/json\" -d \"{\"\"model\"\":\"\"mistral-7b-instruct-v0.2.Q2_K\"\",\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}]}\")"
+      "Bash(curl.exe -s http://localhost/v1/chat/completions -H \"Authorization: Bearer sk-73173dd9ab3bc8822ae9e148f6ba60331fde0f902a2ef880\" -H \"Content-Type: application/json\" -d \"{\"\"model\"\":\"\"mistral-7b-instruct-v0.2.Q2_K\"\",\"\"messages\"\":[{\"\"role\"\":\"\"user\"\",\"\"content\"\":\"\"Say hello in one sentence.\"\"}]}\")",
+      "Bash(docker compose:*)",
+      "Bash(start \"\" \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")"
     ]
   }
 }
