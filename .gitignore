@@ -24,6 +24,8 @@ __pycache__/
 venv/
 env/
 .env.*
+!.env.example
+!chat_cli/.env.example
 *.egg-info/
 dist/
 build/
